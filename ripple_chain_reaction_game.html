@@ -1,0 +1,246 @@
+
+<style>
+  #game-wrap { padding: 1rem 0; font-family: var(--font-sans); }
+  #hud { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  #hud .stat { text-align: center; }
+  #hud .stat-val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+  #hud .stat-lbl { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+  #grid-container { display: flex; justify-content: center; }
+  #grid { display: grid; gap: 5px; }
+  .cell {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: transform 0.1s;
+    border: 2px solid transparent;
+    position: relative;
+    font-size: 0;
+  }
+  .cell:hover { transform: scale(1.1); }
+  .cell.empty { background: var(--color-background-secondary); border-color: var(--color-border-tertiary); border-radius: 8px; cursor: default; }
+  .cell.empty:hover { transform: none; }
+  .cell.c-r { background: #F09595; border-color: #E24B4A; }
+  .cell.c-b { background: #85B7EB; border-color: #378ADD; }
+  .cell.c-g { background: #97C459; border-color: #639922; }
+  .cell.c-y { background: #FAC775; border-color: #EF9F27; }
+  .cell.c-p { background: #AFA9EC; border-color: #7F77DD; }
+  .cell.pulsing { animation: pulse-out 0.4s ease-out forwards; }
+  .cell.clearing { animation: clear-pop 0.3s ease-out forwards; }
+  @keyframes pulse-out {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.35); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes clear-pop {
+    0% { transform: scale(1); opacity: 1; }
+    60% { transform: scale(1.5); opacity: 0.5; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+  #msg { text-align: center; margin-top: 1rem; font-size: 15px; color: var(--color-text-secondary); min-height: 22px; }
+  #btn-row { display: flex; gap: 8px; justify-content: center; margin-top: 1rem; }
+  button { padding: 8px 20px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; cursor: pointer; font-size: 14px; color: var(--color-text-primary); }
+  button:hover { background: var(--color-background-secondary); }
+  button.primary { background: var(--color-background-info); color: var(--color-text-info); border-color: var(--color-border-info); }
+  #legend { display: flex; gap: 12px; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-secondary); }
+  .leg-dot { width: 12px; height: 12px; border-radius: 50%; }
+  #level-badge { font-size: 13px; color: var(--color-text-secondary); }
+  .wave-ring {
+    position: absolute; border-radius: 50%;
+    width: 44px; height: 44px;
+    pointer-events: none;
+    animation: ring-expand 0.5s ease-out forwards;
+  }
+  @keyframes ring-expand {
+    0% { transform: scale(0.5); opacity: 0.8; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+</style>
+
+<div id="game-wrap">
+  <h2 class="sr-only">Ripple — chain reaction puzzle game</h2>
+  <div id="hud">
+    <div class="stat"><div class="stat-val" id="score">0</div><div class="stat-lbl">score</div></div>
+    <div class="stat"><div class="stat-val" id="taps-left">—</div><div class="stat-lbl">taps left</div></div>
+    <div class="stat"><div class="stat-val" id="cleared">0</div><div class="stat-lbl">cleared</div></div>
+  </div>
+  <div id="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#F09595"></div>cross burst</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#85B7EB"></div>ring burst</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#97C459"></div>diagonal burst</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#FAC775"></div>chain to nearest</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#AFA9EC"></div>wildcard (any)</div>
+  </div>
+  <div id="grid-container"><div id="grid"></div></div>
+  <div id="msg">tap a pearl to start the chain</div>
+  <div id="btn-row">
+    <button onclick="newLevel()">new puzzle</button>
+    <button class="primary" onclick="sendPrompt('Tell me more about Ripple and suggest variations or new mechanics I could add to this game')">more ideas ↗</button>
+  </div>
+</div>
+
+<script>
+const COLS = 7, ROWS = 7;
+const COLORS = ['r','b','g','y','p'];
+const COLOR_NAMES = {r:'red',b:'blue',g:'green',y:'yellow',p:'purple'};
+let grid = [], cleared = 0, score = 0, tapsLeft = 3, busy = false, level = 1;
+
+function newLevel() {
+  level++;
+  cleared = 0; score = 0; tapsLeft = level < 3 ? 3 : level < 5 ? 2 : 2;
+  document.getElementById('score').textContent = 0;
+  document.getElementById('cleared').textContent = 0;
+  document.getElementById('taps-left').textContent = tapsLeft;
+  document.getElementById('msg').textContent = 'tap a pearl to start the chain';
+  generateGrid();
+  renderGrid();
+}
+
+function generateGrid() {
+  grid = [];
+  const density = Math.min(0.55 + level * 0.03, 0.75);
+  for (let r = 0; r < ROWS; r++) {
+    grid[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      if (Math.random() < density) {
+        grid[r][c] = COLORS[Math.floor(Math.random() * COLORS.length)];
+      } else {
+        grid[r][c] = null;
+      }
+    }
+  }
+}
+
+function renderGrid() {
+  const el = document.getElementById('grid');
+  el.style.gridTemplateColumns = `repeat(${COLS}, 44px)`;
+  el.innerHTML = '';
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell' + (grid[r][c] ? ' c-' + grid[r][c] : ' empty');
+      cell.dataset.r = r; cell.dataset.c = c;
+      if (grid[r][c]) cell.onclick = () => onTap(r, c);
+      el.appendChild(cell);
+    }
+  }
+}
+
+function getCellEl(r, c) {
+  return document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+}
+
+function onTap(r, c) {
+  if (busy || tapsLeft <= 0 || !grid[r][c]) return;
+  tapsLeft--;
+  document.getElementById('taps-left').textContent = tapsLeft;
+  busy = true;
+  triggerChain([[r, c, grid[r][c], 0]], new Set(), () => {
+    busy = false;
+    checkEnd();
+  });
+}
+
+function triggerChain(queue, visited, onDone) {
+  if (!queue.length) { onDone(); return; }
+  const wave = [];
+  for (const [r, c, color, depth] of queue) {
+    const key = r + ',' + c;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    if (!grid[r][c]) continue;
+    wave.push([r, c, color, depth]);
+  }
+  if (!wave.length) { onDone(); return; }
+
+  const nextQueue = [];
+  let popped = 0;
+  wave.forEach(([r, c, color, depth]) => {
+    const el = getCellEl(r, c);
+    if (!el || !grid[r][c]) return;
+    el.classList.add('pulsing');
+    setTimeout(() => {
+      el.classList.remove('pulsing');
+      if (!grid[r][c]) return;
+      const spread = getSpread(r, c, color, grid);
+      const neighbors = spread.filter(([nr, nc]) => {
+        if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return false;
+        if (!grid[nr][nc]) return false;
+        const ncolor = grid[nr][nc];
+        return ncolor === color || ncolor === 'p' || color === 'p';
+      });
+      if (neighbors.length > 0) {
+        showRing(el, color);
+        neighbors.forEach(([nr, nc]) => {
+          if (!visited.has(nr + ',' + nc)) {
+            nextQueue.push([nr, nc, grid[nr][nc], depth + 1]);
+          }
+        });
+        grid[r][c] = null;
+        score += 10 * (depth + 1);
+        cleared++;
+        document.getElementById('score').textContent = score;
+        document.getElementById('cleared').textContent = cleared;
+        el.classList.add('clearing');
+        setTimeout(() => { el.className = 'cell empty'; el.onclick = null; }, 300);
+      }
+      popped++;
+      if (popped === wave.length) {
+        setTimeout(() => triggerChain(nextQueue, visited, onDone), 200);
+      }
+    }, 250 + depth * 30);
+  });
+}
+
+function getSpread(r, c, color, grid) {
+  if (color === 'r') return [[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+  if (color === 'b') {
+    const res = [];
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr||dc) res.push([r+dr,c+dc]);
+    return res;
+  }
+  if (color === 'g') return [[r-1,c-1],[r-1,c+1],[r+1,c-1],[r+1,c+1]];
+  if (color === 'y') {
+    let best = null, bestD = 999;
+    for (let nr = 0; nr < ROWS; nr++) for (let nc = 0; nc < COLS; nc++) {
+      if ((nr===r&&nc===c) || !grid[nr][nc] || grid[nr][nc]!=='y') continue;
+      const d = Math.abs(nr-r)+Math.abs(nc-c);
+      if (d < bestD) { bestD = d; best = [nr,nc]; }
+    }
+    return best ? [best] : [[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+  }
+  if (color === 'p') {
+    const res = [];
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr||dc) res.push([r+dr,c+dc]);
+    return res;
+  }
+  return [];
+}
+
+function showRing(el, color) {
+  const ring = document.createElement('div');
+  const colorMap = {r:'#E24B4A',b:'#378ADD',g:'#639922',y:'#EF9F27',p:'#7F77DD'};
+  ring.className = 'wave-ring';
+  ring.style.border = `2px solid ${colorMap[color] || '#888'}`;
+  el.appendChild(ring);
+  setTimeout(() => ring.remove(), 500);
+}
+
+function checkEnd() {
+  const remaining = grid.flat().filter(Boolean).length;
+  if (remaining === 0) {
+    document.getElementById('msg').textContent = 'perfect clear! +500 bonus';
+    score += 500;
+    document.getElementById('score').textContent = score;
+    return;
+  }
+  if (tapsLeft <= 0) {
+    document.getElementById('msg').textContent = `${remaining} pearls left — ${score} pts. try again?`;
+  } else {
+    document.getElementById('msg').textContent = `${remaining} pearls left — ${tapsLeft} tap${tapsLeft>1?'s':''} remaining`;
+  }
+}
+
+generateGrid();
+renderGrid();
+document.getElementById('taps-left').textContent = tapsLeft;
+</script>

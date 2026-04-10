@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chroma Core Prototype</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+            overflow: hidden;
+            touch-action: none; /* Prevents zooming/scrolling on mobile */
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            pointer-events: none;
+        }
+        h1 { margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase; color: #e2e8f0; }
+        p { margin: 5px 0 0 0; font-size: 14px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <h1>Chroma Core</h1>
+        <p>Tap anywhere to fire. Match colors to pop!</p>
+        <p id="scoreText">Score: 0</p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreText = document.getElementById('scoreText');
+
+        let width, height;
+        let score = 0;
+        let screenShake = 0;
+
+        // Visual Settings
+        const COLORS = ['#FF2A6D', '#05D9E8', '#FFC800', '#00FF7F'];
+        const ORB_RADIUS = 15;
+        
+        // Game State
+        let center = { x: 0, y: 0 };
+        let coreNodes = [];
+        let rotationAngle = 0;
+        let rotationSpeed = 0.015;
+        
+        let projectile = null;
+        let nextColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            center = { x: width / 2, y: height / 3 };
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Initialize Core
+        function initCore() {
+            coreNodes = [];
+            score = 0;
+            scoreText.innerText = `Score: ${score}`;
+            for (let i = 0; i < 5; i++) {
+                coreNodes.push({
+                    angle: (Math.PI * 2 / 5) * i,
+                    dist: ORB_RADIUS * 2.5,
+                    color: COLORS[Math.floor(Math.random() * COLORS.length)]
+                });
+            }
+        }
+        initCore();
+
+        // Input
+        window.addEventListener('pointerdown', () => {
+            if (!projectile) {
+                projectile = {
+                    x: width / 2,
+                    y: height - 80,
+                    color: nextColor,
+                    speed: 18
+                };
+                nextColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+            }
+        });
+
+        function spawnParticles(x, y, color) {
+            for(let i=0; i<15; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 1.0,
+                    color: color
+                });
+            }
+            screenShake = 15; // Trigger screen shake
+        }
+
+        function update() {
+            rotationAngle += rotationSpeed;
+
+            // Update Projectile
+            if (projectile) {
+                projectile.y -= projectile.speed;
+
+                // Collision Detection with Core Nodes
+                let hit = false;
+                for (let i = 0; i < coreNodes.length; i++) {
+                    let node = coreNodes[i];
+                    let nx = center.x + Math.cos(rotationAngle + node.angle) * node.dist;
+                    let ny = center.y + Math.sin(rotationAngle + node.angle) * node.dist;
+
+                    let dist = Math.hypot(projectile.x - nx, projectile.y - ny);
+
+                    if (dist < ORB_RADIUS * 2) {
+                        hit = true;
+                        if (projectile.color === node.color) {
+                            // MATCH! Pop them
+                            spawnParticles(nx, ny, node.color);
+                            coreNodes.splice(i, 1);
+                            score += 10;
+                            scoreText.innerText = `Score: ${score}`;
+                            
+                            // Speed up slightly
+                            rotationSpeed += 0.0005 * Math.sign(rotationSpeed); 
+                        } else {
+                            // NO MATCH! Attach to core
+                            let attachAngle = Math.atan2(projectile.y - center.y, projectile.x - center.x) - rotationAngle;
+                            let attachDist = Math.hypot(projectile.x - center.x, projectile.y - center.y);
+                            coreNodes.push({
+                                angle: attachAngle,
+                                dist: attachDist,
+                                color: projectile.color
+                            });
+
+                            // Game Over Check
+                            if (attachDist > width/2 - 20 || attachDist > height/2) {
+                                alert("Core grew too large! Score: " + score);
+                                initCore();
+                            }
+                        }
+                        projectile = null;
+                        break;
+                    }
+                }
+
+                // Missed the core completely
+                if (projectile && projectile.y < -50) {
+                    projectile = null;
+                }
+            }
+
+            // Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.03;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Update Screen Shake
+            if (screenShake > 0) screenShake *= 0.8;
+            if (screenShake < 0.5) screenShake = 0;
+        }
+
+        function drawCircle(x, y, radius, color, glow) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            if (glow) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = color;
+            } else {
+                ctx.shadowBlur = 0;
+            }
+            ctx.fill();
+            ctx.shadowBlur = 0; // reset
+        }
+
+        function draw() {
+            // Motion Blur / Trail effect (instead of clearRect)
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            
+            // Apply Screen Shake
+            if (screenShake > 0) {
+                ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+            }
+
+            // Draw Central Hub
+            drawCircle(center.x, center.y, 8, '#ffffff', true);
+
+            // Draw Core Nodes
+            coreNodes.forEach(node => {
+                let nx = center.x + Math.cos(rotationAngle + node.angle) * node.dist;
+                let ny = center.y + Math.sin(rotationAngle + node.angle) * node.dist;
+                
+                // Draw tether line
+                ctx.beginPath();
+                ctx.moveTo(center.x, center.y);
+                ctx.lineTo(nx, ny);
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                drawCircle(nx, ny, ORB_RADIUS, node.color, true);
+            });
+
+            // Draw Projectile
+            if (projectile) {
+                drawCircle(projectile.x, projectile.y, ORB_RADIUS, projectile.color, true);
+            }
+
+            // Draw "Next Color" indicator at the bottom
+            drawCircle(width / 2, height - 40, ORB_RADIUS * 1.2, nextColor, true);
+            
+            // Draw Target Line
+            ctx.beginPath();
+            ctx.setLineDash([5, 10]);
+            ctx.moveTo(width / 2, height - 40);
+            ctx.lineTo(width / 2, center.y + 50);
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.stroke();
+            ctx.setLineDash([]); // reset
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life;
+                drawCircle(p.x, p.y, ORB_RADIUS * Math.max(0.1, p.life * 0.5), p.color, false);
+                ctx.globalAlpha = 1.0;
+            });
+
+            ctx.restore();
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>

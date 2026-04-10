@@ -1,0 +1,220 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+#g{max-width:380px;margin:0 auto;padding:1.25rem 1rem;display:flex;flex-direction:column;align-items:center;gap:1rem;font-family:var(--font-sans)}
+#hdr{width:100%;display:flex;justify-content:space-between;align-items:center}
+.kanji{font-size:26px;font-weight:500;color:var(--color-text-primary);font-family:var(--font-serif);line-height:1}
+.en{font-size:11px;color:var(--color-text-tertiary);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+#ldots{display:flex;gap:4px;margin-top:4px}
+.ldot{width:5px;height:5px;border-radius:50%;background:var(--color-border-secondary);transition:background .2s}
+.ldot.done{background:var(--color-text-primary)}
+.ldot.cur{background:var(--color-text-secondary);transform:scale(1.3)}
+#inkbox{display:flex;align-items:center;gap:6px}
+.ilabel{font-size:11px;color:var(--color-text-tertiary);letter-spacing:.1em}
+#pips{display:flex;gap:3px}
+.pip{width:9px;height:9px;border-radius:50%;background:#1A1008;transition:opacity .2s,transform .2s}
+.pip.spent{opacity:.15;transform:scale(.7)}
+#hint{font-size:13px;color:var(--color-text-secondary);text-align:center;min-height:18px;transition:opacity .3s}
+#pw{position:relative;background:#F9F4EB;border:0.5px solid var(--color-border-secondary);border-radius:3px;overflow:hidden;--cs:70px}
+#grid{display:grid;grid-template-columns:repeat(4,var(--cs));grid-template-rows:repeat(4,var(--cs))}
+.cell{width:var(--cs);height:var(--cs);border:0.5px solid rgba(0,0,0,.07);position:relative;display:flex;align-items:center;justify-content:center;background:transparent;transition:background .1s}
+.cell.tap{cursor:pointer}
+.cell.tap:hover{background:rgba(0,0,0,.025)}
+.idk{width:46px;height:46px;border-radius:50%;position:absolute;pointer-events:none;transition:background .3s,opacity .3s}
+.idk.player{background:#1A1008;animation:bloom .22s ease-out}
+.idk.given{background:#3D2410}
+.idk.mirror{background:rgba(26,16,8,.18);border:1.5px dashed rgba(26,16,8,.2)}
+.tring{width:54px;height:54px;border-radius:50%;border:1.5px dashed #C84026;position:absolute;opacity:.45;pointer-events:none}
+@keyframes bloom{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+#fv{position:absolute;left:50%;top:0;bottom:0;width:1.5px;background:repeating-linear-gradient(to bottom,rgba(0,0,0,.22) 0,rgba(0,0,0,.22) 4px,transparent 4px,transparent 9px);transform:translateX(-50%);pointer-events:none;z-index:5}
+#fh{position:absolute;left:0;right:0;top:50%;height:1.5px;background:repeating-linear-gradient(to right,rgba(0,0,0,.22) 0,rgba(0,0,0,.22) 4px,transparent 4px,transparent 9px);transform:translateY(-50%);pointer-events:none;z-index:5;display:none}
+.cell.ok .idk{background:#2D6A4F !important}
+.cell.bad .idk{background:#B83222 !important}
+.cell.miss .tring{border-color:#B83222;opacity:.9}
+@keyframes ppulse{0%{transform:none}40%{transform:scale(.96)}70%{transform:scale(1.01)}100%{transform:none}}
+.fold-anim{animation:ppulse .45s ease-in-out}
+#ctrls{display:flex;gap:8px}
+#ctrls button{padding:7px 18px;border-radius:var(--border-radius-md);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;letter-spacing:.04em}
+#fb{background:var(--color-text-primary);color:var(--color-background-primary);border:none}
+#fb:hover:not(:disabled){opacity:.82}
+#fb:disabled{opacity:.3;cursor:default}
+#rb{background:transparent;color:var(--color-text-secondary);border:0.5px solid var(--color-border-secondary)}
+#rb:hover{background:var(--color-background-secondary)}
+#res{display:flex;flex-direction:column;align-items:center;gap:10px;animation:fi .35s ease-out}
+#res.h{display:none}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+#rmsg{font-size:15px;font-weight:500;color:var(--color-text-primary)}
+#rsub{font-size:13px;color:var(--color-text-secondary)}
+.rbx{display:flex;gap:8px}
+.rbx button{padding:7px 16px;border-radius:var(--border-radius-md);font-size:13px;cursor:pointer;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary)}
+.rbx button:hover{background:var(--color-background-secondary)}
+.bp{background:var(--color-text-primary) !important;color:var(--color-background-primary) !important;border:none !important}
+</style>
+<h2 class="sr-only">FOLD — ink and paper puzzle game. Place ink drops on the active half of the grid, then press Fold to mirror the ink and complete the target pattern.</h2>
+<div id="g">
+  <div id="hdr">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="kanji" id="kj">始</span>
+      <div><div class="en" id="ev">Begin</div><div id="ldots"></div></div>
+    </div>
+    <div id="inkbox"><span class="ilabel">INK</span><div id="pips"></div></div>
+  </div>
+  <div id="hint">Tap the left half. Watch it mirror.</div>
+  <div id="pw"><div id="grid"></div><div id="fv"></div><div id="fh"></div></div>
+  <div id="ctrls"><button id="fb">FOLD</button><button id="rb">Reset</button></div>
+  <div id="res" class="h"><div id="rmsg"></div><div id="rsub"></div><div class="rbx" id="rbx"></div></div>
+</div>
+<script>
+const LEVELS=[
+  {k:'始',e:'Begin',hint:'Tap the left half — ink mirrors across the fold.',ft:'v',mi:2,gv:[],tgt:[[1,1],[1,2],[2,1],[2,2]]},
+  {k:'花',e:'Blossom',hint:'Find the diamond hidden in symmetry.',ft:'v',mi:4,gv:[],tgt:[[0,1],[0,2],[1,0],[1,3],[2,0],[2,3],[3,1],[3,2]]},
+  {k:'天',e:'Heaven',hint:'The fold runs along the horizon. Tap the top half.',ft:'h',mi:4,gv:[],tgt:[[0,0],[0,3],[1,1],[1,2],[2,1],[2,2],[3,0],[3,3]]},
+  {k:'鏡',e:'Mirror',hint:'Some ink is already placed. Complete the reflection.',ft:'v',mi:2,gv:[[0,0]],tgt:[[0,0],[0,1],[0,2],[0,3],[1,1],[1,2]]},
+  {k:'蝶',e:'Butterfly',hint:'Work around what\'s given. Every drop counts.',ft:'v',mi:4,gv:[[1,1],[2,1]],tgt:[[0,0],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,3]]}
+];
+const S=4;
+let lv=0,grid=null,phase='place',drops=0;
+
+function mirror(r,c,ft){return ft==='v'?[r,S-1-c]:[S-1-r,c]}
+function isPlayer(r,c,ft){return ft==='v'?c<S/2:r<S/2}
+
+function init(i){
+  lv=i; drops=0; phase='place';
+  const L=LEVELS[i];
+  grid=Array.from({length:S},()=>Array(S).fill('e'));
+  for(const[gr,gc]of L.gv){
+    grid[gr][gc]='v';
+    const[mr,mc]=mirror(gr,gc,L.ft);
+    grid[mr][mc]='v';
+  }
+  render();
+}
+
+function click(r,c){
+  if(phase!=='place')return;
+  const L=LEVELS[lv];
+  if(!isPlayer(r,c,L.ft))return;
+  if(grid[r][c]==='v')return;
+  const[mr,mc]=mirror(r,c,L.ft);
+  if(grid[mr][mc]==='v')return;
+  if(grid[r][c]==='i'){
+    grid[r][c]='e';
+    if(grid[mr][mc]==='m')grid[mr][mc]='e';
+    drops--;
+  } else {
+    if(drops>=L.mi)return;
+    grid[r][c]='i';
+    if(grid[mr][mc]==='e')grid[mr][mc]='m';
+    drops++;
+  }
+  render();
+}
+
+function fold(){
+  if(phase!=='place')return;
+  phase='folding';
+  document.getElementById('hint').textContent='Folding...';
+  document.getElementById('fb').disabled=true;
+  document.getElementById('rb').disabled=true;
+  document.getElementById('pw').classList.add('fold-anim');
+  setTimeout(()=>{
+    document.getElementById('pw').classList.remove('fold-anim');
+    // solidify mirrors
+    for(let r=0;r<S;r++)for(let c=0;c<S;c++)if(grid[r][c]==='m')grid[r][c]='i';
+    // check
+    const L=LEVELS[lv];
+    const tset=new Set(L.tgt.map(([r,c])=>`${r},${c}`));
+    const inked=new Set();
+    for(let r=0;r<S;r++)for(let c=0;c<S;c++)if(grid[r][c]!=='e')inked.add(`${r},${c}`);
+    let ok=inked.size===tset.size;
+    if(ok)for(const k of tset)if(!inked.has(k)){ok=false;break}
+    phase=ok?'win':'fail';
+    render();
+  },500);
+}
+
+function render(){
+  const L=LEVELS[lv];
+  document.getElementById('kj').textContent=L.k;
+  document.getElementById('ev').textContent=L.e;
+  if(phase==='place')document.getElementById('hint').textContent=L.hint;
+  else if(phase==='fail')document.getElementById('hint').textContent='Not quite — red cells missed the target.';
+  else if(phase==='win')document.getElementById('hint').textContent='';
+
+  // dots
+  document.getElementById('ldots').innerHTML=LEVELS.map((_,i)=>`<div class="ldot ${i<lv?'done':i===lv?'cur':''}"></div>`).join('');
+
+  // pips
+  document.getElementById('pips').innerHTML=Array.from({length:L.mi},(_,i)=>`<div class="pip ${i<drops?'spent':''}"></div>`).join('');
+
+  // fold lines
+  document.getElementById('fv').style.display=L.ft==='v'?'block':'none';
+  document.getElementById('fh').style.display=L.ft==='h'?'block':'none';
+
+  // grid
+  const tset=new Set(L.tgt.map(([r,c])=>`${r},${c}`));
+  const el=document.getElementById('grid');
+  el.innerHTML='';
+  for(let r=0;r<S;r++){
+    for(let c=0;c<S;c++){
+      const key=`${r},${c}`;
+      const cs=grid[r][c];
+      const inT=tset.has(key);
+      const isInked=cs!=='e';
+      const canTap=isPlayer(r,c,L.ft)&&cs!=='v'&&phase==='place';
+      const d=document.createElement('div');
+      d.className='cell'+(canTap?' tap':'');
+      // result classes
+      if(phase==='win'||phase==='fail'){
+        if(isInked&&inT)d.classList.add('ok');
+        else if(isInked&&!inT)d.classList.add('bad');
+        else if(!isInked&&inT)d.classList.add('miss');
+      }
+      // target ring (place phase only, on empty target cells)
+      if(inT&&phase==='place'){
+        const tr=document.createElement('div');
+        tr.className='tring';
+        d.appendChild(tr);
+      }
+      // ink dot
+      if(isInked){
+        const dk=document.createElement('div');
+        dk.className='idk '+({'i':'player','v':'given','m':'mirror'}[cs]||'player');
+        d.appendChild(dk);
+      }
+      d.addEventListener('click',()=>click(r,c));
+      el.appendChild(d);
+    }
+  }
+
+  // controls
+  document.getElementById('fb').disabled=phase!=='place';
+  document.getElementById('rb').disabled=phase==='folding';
+
+  // result panel
+  const res=document.getElementById('res');
+  if(phase==='win'||phase==='fail'){
+    res.classList.remove('h');
+    document.getElementById('rmsg').textContent=phase==='win'?'✓ Perfect fold':'Try again';
+    document.getElementById('rsub').textContent=phase==='win'
+      ?(lv<LEVELS.length-1?'The pattern is complete.':'You\'ve mastered all levels.')
+      :'Some cells didn\'t match.';
+    const rbx=document.getElementById('rbx');
+    if(phase==='win'){
+      rbx.innerHTML=lv<LEVELS.length-1
+        ?`<button class="bp" id="nx">Next level →</button>`
+        :`<button id="nx">Play again</button>`;
+      document.getElementById('nx').onclick=()=>init(lv<LEVELS.length-1?lv+1:0);
+    } else {
+      rbx.innerHTML=`<button class="bp" id="rt">Retry</button>`;
+      document.getElementById('rt').onclick=()=>init(lv);
+    }
+  } else {
+    res.classList.add('h');
+  }
+}
+
+document.getElementById('fb').onclick=fold;
+document.getElementById('rb').onclick=()=>init(lv);
+init(0);
+</script>

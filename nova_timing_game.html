@@ -1,0 +1,254 @@
+
+<style>
+#nw{border-radius:12px;overflow:hidden;background:#05050e;user-select:none;touch-action:none;cursor:pointer;}
+canvas{display:block;width:100%;}
+#nh{display:flex;justify-content:space-between;align-items:center;padding:10px 18px 12px;background:#05050e;}
+.nv{font-size:20px;font-weight:500;color:#fff;text-align:center;line-height:1.1;}
+.nl{font-size:11px;color:rgba(255,255,255,0.28);text-align:center;margin-top:2px;}
+#nbr{display:flex;gap:8px;justify-content:center;margin-top:10px;}
+</style>
+
+<h2 class="sr-only">Nova — tap glowing orbs when their pulse ring aligns with the dashed target ring. 90 second rounds, 3 lives, combo multipliers.</h2>
+
+<div id="nw">
+  <canvas id="cv"></canvas>
+  <div id="nh">
+    <div><div class="nv" id="hsc">0</div><div class="nl">score</div></div>
+    <div><div class="nv" id="htm">90</div><div class="nl">seconds</div></div>
+    <div style="text-align:center">
+      <div class="nv" id="hcm" style="font-size:15px;color:#FAC775;min-height:22px;"></div>
+      <div id="hlv" style="margin-top:3px;display:flex;gap:5px;justify-content:center;"></div>
+    </div>
+  </div>
+</div>
+<div id="nbr">
+  <button onclick="startGame()">restart</button>
+  <button onclick="sendPrompt('I like the Nova timing game. Suggest new orb types, special mechanics like shields or multipliers, level themes, and progression systems to expand it into a full mobile game.')">expand this ↗</button>
+</div>
+
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+const COLS=['#ED93B1','#85B7EB','#5DCAA5','#FAC775','#AFA9EC'];
+let W,H,DPR,orbs=[],parts=[],floats=[];
+let score=0,combo=0,maxCombo=0,lives=3,timer=90;
+let state='ready',lastT=0,spawnT=0,spawnI=2.2,oid=0;
+
+function resize(){
+  DPR=window.devicePixelRatio||1;
+  W=cv.offsetWidth;
+  H=Math.min(490,Math.round(window.innerHeight*0.5));
+  cv.style.height=H+'px';
+  cv.width=Math.round(W*DPR);
+  cv.height=Math.round(H*DPR);
+  cx.scale(DPR,DPR);
+  cx.fillStyle='#05050e';cx.fillRect(0,0,W,H);
+}
+
+function spawnOrb(){
+  const e=Math.floor(Math.random()*4);
+  let x,y;
+  if(e===0){x=Math.random()*W;y=-38;}
+  else if(e===1){x=W+38;y=Math.random()*H;}
+  else if(e===2){x=Math.random()*W;y=H+38;}
+  else{x=-38;y=Math.random()*H;}
+  const tx=W*0.18+Math.random()*W*0.64,ty=H*0.12+Math.random()*H*0.76;
+  const ang=Math.atan2(ty-y,tx-x)+(Math.random()-0.5)*0.7;
+  const spd=26+Math.random()*34;
+  const r=14+Math.random()*9;
+  const tR=r+27+Math.random()*16;
+  orbs.push({
+    id:++oid,x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
+    r,tR,mR:tR+20,
+    col:COLS[Math.floor(Math.random()*COLS.length)],
+    pt:Math.random()*0.5,
+    ps:0.40+Math.random()*0.24,
+    born:0,maxAge:5.2+Math.random()*2.4,
+    life:0,pp:Math.random()*Math.PI*2,tapped:false
+  });
+}
+
+function loop(ts){
+  const dt=Math.min((ts-lastT)/1000,0.05);lastT=ts;
+  update(dt,ts*0.001);
+  draw(ts*0.001);
+  requestAnimationFrame(loop);
+}
+
+function update(dt,t){
+  if(state!=='playing') return;
+  timer=Math.max(0,timer-dt);
+  if(timer===0){endGame();return;}
+  spawnT-=dt;
+  if(spawnT<=0){
+    spawnOrb();
+    const prog=1-timer/90;
+    spawnI=Math.max(0.8,2.2-prog*1.3);
+    spawnT=spawnI*(0.65+Math.random()*0.7);
+  }
+  for(const o of orbs){
+    if(o.tapped){o.life-=dt*5;continue;}
+    o.x+=o.vx*dt;o.y+=o.vy*dt;
+    o.born+=dt;
+    o.pt=(o.pt+o.ps*dt)%1;
+    o.life=o.born<0.4?o.born/0.4:o.born>o.maxAge-0.9?Math.max(0,(o.maxAge-o.born)/0.9):1;
+    if(o.born>=o.maxAge){
+      o.tapped=true;
+      lives=Math.max(0,lives-1);
+      combo=0;
+      floats.push({x:o.x,y:o.y,text:'miss',col:'#F09595',life:1,vy:-26});
+      if(lives===0){endGame();return;}
+    }
+  }
+  orbs=orbs.filter(o=>o.life>0);
+  for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=55*dt;p.life-=dt/p.dur;p.r*=0.97;}
+  parts=parts.filter(p=>p.life>0);
+  for(const f of floats){f.y+=f.vy*dt;f.life-=dt;}
+  floats=floats.filter(f=>f.life>0);
+  updateHUD();
+}
+
+function tapOrb(o){
+  if(o.tapped) return;
+  const pr=o.r+(o.mR-o.r)*o.pt;
+  const diff=Math.abs(pr-o.tR);
+  let label,pts;
+  if(diff<8){label='PERFECT';pts=100;}
+  else if(diff<18){label='GREAT';pts=50;}
+  else if(diff<30){label='GOOD';pts=20;}
+  else{label='ok';pts=8;}
+  combo++;maxCombo=Math.max(maxCombo,combo);
+  score+=pts*Math.min(combo,10);
+  const n=diff<8?22:16;
+  for(let i=0;i<n;i++){
+    const a=(i/n)*Math.PI*2+Math.random()*0.35,sp=50+Math.random()*130;
+    parts.push({x:o.x,y:o.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,r:1.5+Math.random()*4,life:1,dur:0.4+Math.random()*0.55,col:o.col});
+  }
+  if(diff<8) for(let i=0;i<10;i++){const a=(i/10)*Math.PI*2;parts.push({x:o.x,y:o.y,vx:Math.cos(a)*140,vy:Math.sin(a)*140,r:2,life:1,dur:0.22,col:'#ffffff'});}
+  const cs=combo>1?` ×${Math.min(combo,10)}`:'';
+  floats.push({x:o.x,y:o.y-o.r-12,text:label+cs,col:diff<8?'#fff':o.col,life:0.95,vy:-38});
+  o.tapped=true;
+  updateHUD();
+}
+
+function onTap(x,y){
+  if(state==='ready'||state==='done'){startGame();return;}
+  if(state!=='playing') return;
+  let best=null,bestD=Infinity;
+  for(const o of orbs){
+    if(o.tapped||o.life<0.35) continue;
+    const d=Math.hypot(x-o.x,y-o.y);
+    if(d<o.r+24&&d<bestD){best=o;bestD=d;}
+  }
+  if(best) tapOrb(best);
+}
+
+function draw(t){
+  cx.fillStyle='rgba(5,5,14,0.86)';cx.fillRect(0,0,W,H);
+
+  for(const o of orbs){
+    if(o.life<=0) continue;
+    const al=o.life;
+    const pr=o.r+(o.mR-o.r)*o.pt;
+    const diff=Math.abs(pr-o.tR);
+    const hot=diff<10;
+    const idle=1+Math.sin(t*2.2+o.pp)*0.065;
+
+    cx.globalAlpha=al*0.05;cx.fillStyle=o.col;
+    cx.beginPath();cx.arc(o.x,o.y,o.r*idle*4,0,Math.PI*2);cx.fill();
+    cx.globalAlpha=al*0.11;
+    cx.beginPath();cx.arc(o.x,o.y,o.r*idle*2,0,Math.PI*2);cx.fill();
+
+    cx.setLineDash([5,4]);
+    cx.globalAlpha=al*(hot?0.92:0.2);
+    cx.strokeStyle=hot?'#fff':o.col;cx.lineWidth=hot?2.2:0.9;
+    cx.beginPath();cx.arc(o.x,o.y,o.tR,0,Math.PI*2);cx.stroke();
+    cx.setLineDash([]);
+
+    const pA=Math.max(0,1-o.pt);
+    cx.globalAlpha=al*pA*0.25;cx.strokeStyle=o.col;cx.lineWidth=9;
+    cx.beginPath();cx.arc(o.x,o.y,pr,0,Math.PI*2);cx.stroke();
+    cx.globalAlpha=al*pA*0.88;cx.lineWidth=1.8;
+    cx.beginPath();cx.arc(o.x,o.y,pr,0,Math.PI*2);cx.stroke();
+
+    cx.globalAlpha=al*0.9;cx.fillStyle=o.col;
+    cx.beginPath();cx.arc(o.x,o.y,o.r*idle,0,Math.PI*2);cx.fill();
+    cx.globalAlpha=al*0.3;cx.fillStyle='#fff';
+    cx.beginPath();cx.arc(o.x-o.r*0.23,o.y-o.r*0.23,o.r*0.31,0,Math.PI*2);cx.fill();
+    cx.globalAlpha=1;
+  }
+
+  const prog=timer/90;
+  cx.fillStyle='rgba(255,255,255,0.06)';cx.fillRect(0,H-3,W,3);
+  const barCol=timer<15?'rgba(240,149,149,0.7)':timer<30?'rgba(250,199,117,0.6)':'rgba(255,255,255,0.4)';
+  cx.fillStyle=barCol;cx.fillRect(0,H-3,W*prog,3);
+
+  for(const p of parts){
+    cx.globalAlpha=Math.max(0,p.life)*0.88;cx.fillStyle=p.col;
+    cx.beginPath();cx.arc(p.x,p.y,Math.max(0.1,p.r),0,Math.PI*2);cx.fill();
+  }
+  cx.globalAlpha=1;
+  cx.textAlign='center';
+  for(const f of floats){
+    cx.globalAlpha=Math.max(0,f.life);cx.fillStyle=f.col;
+    cx.font='500 13px sans-serif';cx.fillText(f.text,f.x,f.y);
+  }
+  cx.globalAlpha=1;cx.textAlign='start';
+
+  if(state==='ready'){
+    cx.fillStyle='rgba(5,5,14,0.72)';cx.fillRect(0,0,W,H);
+    cx.textAlign='center';
+    cx.globalAlpha=0.9;cx.fillStyle='#fff';cx.font='500 34px sans-serif';
+    cx.fillText('NOVA',W/2,H/2-18);
+    cx.globalAlpha=1;cx.fillStyle='rgba(255,255,255,0.38)';cx.font='400 13px sans-serif';
+    cx.fillText('tap orbs when the ring hits the dashed circle',W/2,H/2+12);
+    cx.fillStyle='rgba(255,255,255,0.22)';cx.font='400 12px sans-serif';
+    cx.fillText('tap anywhere to begin',W/2,H/2+38);
+    cx.textAlign='start';
+  }
+  if(state==='done'){
+    cx.fillStyle='rgba(5,5,14,0.82)';cx.fillRect(0,0,W,H);
+    cx.textAlign='center';
+    cx.globalAlpha=0.85;cx.fillStyle='rgba(255,255,255,0.5)';cx.font='400 15px sans-serif';
+    cx.fillText('round over',W/2,H/2-44);
+    cx.globalAlpha=1;cx.fillStyle='#fff';cx.font='500 48px sans-serif';
+    cx.fillText(score,W/2,H/2+4);
+    cx.fillStyle='rgba(250,199,117,0.7)';cx.font='400 13px sans-serif';
+    cx.fillText('best combo ×'+maxCombo,W/2,H/2+30);
+    cx.fillStyle='rgba(255,255,255,0.25)';cx.font='400 12px sans-serif';
+    cx.fillText('tap to play again',W/2,H/2+56);
+    cx.textAlign='start';
+  }
+}
+
+function startGame(){
+  orbs=[];parts=[];floats=[];
+  score=0;combo=0;maxCombo=0;lives=3;timer=90;
+  state='playing';spawnT=0.5;spawnI=2.2;
+  cx.fillStyle='#05050e';cx.fillRect(0,0,W,H);
+  updateHUD();
+}
+
+function endGame(){state='done';orbs=[];updateHUD();}
+
+function updateHUD(){
+  document.getElementById('hsc').textContent=score;
+  document.getElementById('htm').textContent=Math.ceil(timer);
+  document.getElementById('hcm').textContent=combo>1?'×'+Math.min(combo,10):'';
+  const lv=document.getElementById('hlv');lv.innerHTML='';
+  for(let i=0;i<3;i++){
+    const d=document.createElement('span');
+    d.style.cssText='display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(i<lives?'#fff':'rgba(255,255,255,0.12)');
+    lv.appendChild(d);
+  }
+}
+
+cv.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  const r=cv.getBoundingClientRect();
+  onTap(e.clientX-r.left,e.clientY-r.top);
+},{passive:false});
+
+window.addEventListener('resize',()=>{resize();});
+
+resize();updateHUD();requestAnimationFrame(loop);
+</script>
