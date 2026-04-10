@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype Browser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, #fileList {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, #fileList:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        #fileList {
+            height: 200px;
+            cursor: pointer;
+            background: white;
+        }
+
+        #fileList option {
+            padding: 8px;
+        }
+
+        #fileList option:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #openBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        #openBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        #openBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .info {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #666;
+            margin-top: 20px;
+            border-left: 4px solid #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Prototype Browser</h1>
+
+        <div class="section">
+            <label for="folderSelect">Select Folder</label>
+            <select id="folderSelect">
+                <option value="">-- Choose a folder --</option>
+                <option value="20260410">20260410</option>
+            </select>
+        </div>
+
+        <div class="section">
+            <label for="fileList">Select HTML File</label>
+            <select id="fileList" size="8">
+                <option value="">-- Select a folder first --</option>
+            </select>
+        </div>
+
+        <div class="button-group">
+            <button id="openBtn" disabled>Open File</button>
+        </div>
+
+        <div class="info">
+            <strong>💡 Tip:</strong> Select a folder from the dropdown above, then choose an HTML file from the list to open it.
+        </div>
+    </div>
+
+    <script>
+        const folderSelect = document.getElementById('folderSelect');
+        const fileList = document.getElementById('fileList');
+        const openBtn = document.getElementById('openBtn');
+
+        // Repository structure
+        const repository = {
+            '20260410': [
+                { file: 'chroma_core.html', display: 'Chroma Core' },
+                { file: 'fold_ink_puzzle_game.html', display: 'Fold Ink Puzzle Game' },
+                { file: 'lantern_color_mix_puzzle.html', display: 'Lantern Color Mix Puzzle' },
+                { file: 'nova_timing_game.html', display: 'Nova Timing Game' },
+                { file: 'pulse_chain_reaction.html', display: 'Pulse Chain Reaction' },
+                { file: 'ring_cascade.html', display: 'Ring Cascade' },
+                { file: 'ripple_chain_reaction_game.html', display: 'Ripple Chain Reaction Game' }
+            ]
+        };
+
+        // Handle folder selection
+        folderSelect.addEventListener('change', function() {
+            const selectedFolder = this.value;
+            fileList.innerHTML = '';
+
+            if (selectedFolder && repository[selectedFolder]) {
+                const files = repository[selectedFolder];
+                files.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = `${selectedFolder}/${item.file}`;
+                    option.textContent = item.display;
+                    fileList.appendChild(option);
+                });
+                openBtn.disabled = true;
+                fileList.focus();
+            } else {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '-- Select a folder first --';
+                fileList.appendChild(option);
+                openBtn.disabled = true;
+            }
+        });
+
+        // Initialize file list on page load
+        window.addEventListener('load', function() {
+            const currentFolder = folderSelect.value;
+            if (currentFolder) {
+                folderSelect.dispatchEvent(new Event('change'));
+            }
+        });
+
+        // Handle file selection
+        fileList.addEventListener('change', function() {
+            openBtn.disabled = !this.value;
+        });
+
+        // Handle open button
+        openBtn.addEventListener('click', function() {
+            const selectedFile = fileList.value;
+            if (selectedFile) {
+                window.location.href = selectedFile;
+            }
+        });
+
+        // Allow opening by double-clicking
+        fileList.addEventListener('dblclick', function() {
+            if (this.value) {
+                openBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>
