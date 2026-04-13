@@ -1,0 +1,511 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--panel-bg:rgba(255,255,255,.025)}
+#app{max-width:980px;margin:0 auto;padding:1rem .75rem;display:grid;grid-template-columns:minmax(330px,1fr) 250px;gap:1rem;align-items:start;font-family:var(--font-sans)}
+@media (max-width:820px){#app{grid-template-columns:1fr}}
+#main{display:flex;flex-direction:column;align-items:center;gap:.9rem}
+#side{display:flex;flex-direction:column;gap:.75rem}
+.card{padding:.85rem;border:0.5px solid var(--color-border-secondary);border-radius:14px;background:var(--panel-bg)}
+#hdr{width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem}
+#lname{font-size:17px;font-weight:600;color:var(--color-text-primary)}
+#ldots{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+.ld{width:5px;height:5px;border-radius:50%;background:var(--color-border-secondary)}
+.ld.done{background:var(--color-text-primary)}
+.ld.cur{background:var(--color-text-secondary);transform:scale(1.35)}
+#hint{font-size:12px;color:var(--color-text-tertiary);text-align:right;max-width:58%;line-height:1.45}
+#gw{background:#0a0a14;border-radius:8px;padding:3px;border:0.5px solid #2a2a40}
+#grid{display:grid;grid-template-columns:repeat(6,54px);grid-template-rows:repeat(6,54px);gap:2px;background:#0a0a14}
+.cell{width:54px;height:54px;position:relative;border-radius:3px;background:#111126;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .18s,filter .1s,box-shadow .15s}
+.cell:hover:not(.wall):not(.blocked){filter:brightness(1.15)}
+.cell.wall{background:#1a1a2c;cursor:default}
+.cell.wall::before{content:'';position:absolute;inset:0;border-radius:3px;background:repeating-linear-gradient(45deg,rgba(255,255,255,.03) 0,rgba(255,255,255,.03) 1px,transparent 1px,transparent 7px)}
+.cell.blocked{cursor:default}
+.cell.target-ok{box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+.cell.sel{box-shadow:0 0 0 2px rgba(255,255,255,.16) inset,0 0 0 1px rgba(255,255,255,.22)}
+.lantern{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.9);position:relative;z-index:3;flex-shrink:0;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.lantern.given{border-color:rgba(255,220,80,.95);box-shadow:0 0 0 1px rgba(255,220,80,.3),0 0 0 2px rgba(0,0,0,.15)}
+.tile{position:absolute;inset:auto 4px 4px auto;z-index:2;font-size:10px;line-height:1;color:#fff;display:flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.14)}
+.tile.mirror{background:rgba(255,255,255,.12);font-size:11px}
+.tile.split{background:rgba(52,211,153,.16);font-size:10px}
+.tile.turn{background:rgba(255,179,71,.15);font-size:10px}
+.target-ind{position:absolute;bottom:4px;right:4px;width:9px;height:9px;border-radius:50%;border:1.5px solid rgba(255,255,255,.7);z-index:3}
+.target-met{position:absolute;bottom:3px;right:3px;width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.14);z-index:3;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff}
+.hintline{font-size:12px;color:var(--color-text-tertiary);text-align:center;line-height:1.45;min-height:1.4em}
+#palette{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+.pb{padding:6px 13px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;display:flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:var(--color-text-primary);transition:all .15s}
+.pb:disabled{opacity:.25;cursor:default}
+.pb.sel{border-color:var(--color-text-primary);background:var(--color-background-secondary)}
+.pb .pd{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+#ctrls{display:flex;gap:7px}
+#ctrls button{padding:6px 16px;border-radius:var(--border-radius-md);font-size:12px;cursor:pointer;transition:all .15s;font-weight:500}
+#rb{background:transparent;border:0.5px solid var(--color-border-secondary);color:var(--color-text-secondary)}
+#rb:hover{background:var(--color-background-secondary)}
+#res{display:none;flex-direction:column;align-items:center;gap:9px;animation:fi .3s}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+#rmsg{font-size:15px;font-weight:600;color:var(--color-text-primary)}
+#rsub{font-size:12px;color:var(--color-text-secondary);text-align:center}
+.rbx{display:flex;gap:7px}
+.rbx button{padding:6px 14px;border-radius:var(--border-radius-md);font-size:12px;cursor:pointer;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary)}
+.rbx button:hover{background:var(--color-background-secondary)}
+.rbx button.pr{background:var(--color-text-primary)!important;color:var(--color-background-primary)!important;border:none!important}
+.panel-title{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-tertiary);margin-bottom:.6rem}
+.stack{display:flex;flex-direction:column;gap:.45rem}
+.mix{display:flex;align-items:center;gap:.5rem;font-size:12px;color:var(--color-text-primary);line-height:1.35}
+.dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+.formula{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+.formula .name{font-weight:600}
+.badge{padding:3px 8px;border-radius:999px;border:0.5px solid var(--color-border-secondary);font-size:11px;color:var(--color-text-secondary)}
+.help{font-size:12px;color:var(--color-text-tertiary);line-height:1.45}
+.legendRow{display:flex;gap:10px;flex-wrap:wrap}
+.legendItem{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-tertiary)}
+.legendDot{width:8px;height:8px;border-radius:50%}
+.mech{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-primary)}
+.glyph{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.08);font-size:11px;color:#fff;flex-shrink:0}
+</style>
+<h2 class="sr-only">LANTERN — a color mixing light puzzle. Move lanterns after placing them, bend beams with mirrors, split beams in two, and match the target colors shown in the marked cells.</h2>
+<div id="app">
+  <div id="main">
+    <div id="hdr">
+      <div><div id="lname">Spark</div><div id="ldots"></div></div>
+      <div id="hint">Place your lantern so its light reaches the target.</div>
+    </div>
+
+    <div id="gw"><div id="grid"></div></div>
+
+    <div class="hintline" id="status">Tap a lantern to pick it up, then tap a free cell to move it.</div>
+
+    <div id="palette"></div>
+
+    <div id="ctrls"><button id="rb">Reset</button></div>
+
+    <div id="res"><div id="rmsg"></div><div id="rsub"></div><div class="rbx" id="rbx"></div></div>
+  </div>
+
+  <div id="side">
+    <div class="card">
+      <div class="panel-title">Color guide</div>
+      <div class="stack" id="formulaList"></div>
+    </div>
+    <div class="card">
+      <div class="panel-title">Level tools</div>
+      <div class="stack" id="mechanicList"></div>
+    </div>
+    <div class="card">
+      <div class="panel-title">Base colors</div>
+      <div class="legendRow">
+        <div class="legendItem"><div class="legendDot" style="background:#FF3B3B"></div>Red</div>
+        <div class="legendItem"><div class="legendDot" style="background:#2B7FFF"></div>Blue</div>
+        <div class="legendItem"><div class="legendDot" style="background:#FFD60A"></div>Yellow</div>
+      </div>
+      <div class="help" style="margin-top:.65rem">Mirrors bend beams, splitters split them in 2, turners rotate them, and walls stop them cold.</div>
+    </div>
+  </div>
+</div>
+<script>
+const SZ=6;
+const DIRS={U:{dr:-1,dc:0},R:{dr:0,dc:1},D:{dr:1,dc:0},L:{dr:0,dc:-1}};
+const DIR_ORDER=['U','R','D','L'];
+const RIGHT={U:'R',R:'D',D:'L',L:'U'};
+const LEFT={U:'L',L:'D',D:'R',R:'U'};
+const MIRROR_MAP={'/':{U:'R',R:'U',D:'L',L:'D'},'\\':{U:'L',L:'U',D:'R',R:'D'}};
+const COLOR_HEX={R:'#FF3B3B',B:'#2B7FFF',Y:'#FFD60A'};
+const COLOR_NAME={R:'Red',B:'Blue',Y:'Yellow'};
+const COMBO_INFO={BR:{name:'Purple',hex:'#9B59F0'},RY:{name:'Orange',hex:'#FF8C00'},BY:{name:'Green',hex:'#30D158'},BRY:{name:'White',hex:'#F5F5F5'}};
+
+function level(cfg){
+  return {name:'',hint:'',given:[],palette:{},walls:[],mirrors:[],splitters:[],turners:[],targets:[],...cfg};
+}
+const G=(r,c,color)=>({r,c,color});
+const X=(r,c,need)=>({r,c,need});
+const M=(r,c,kind)=>({r,c,kind});
+const S=(r,c)=>({r,c});
+const T=(r,c,turn)=>({r,c,turn});
+const W=(...cells)=>cells;
+
+const LEVELS=[
+  level({name:'Spark',hint:'Start simple: one lantern, one target.',palette:{R:1},targets:[X(2,2,['R'])]}),
+  level({name:'Cross',hint:'Two colors crossing creates a mix.',palette:{R:1,B:1},targets:[X(1,3,['R']),X(3,1,['B']),X(1,1,['R','B'])]}),
+  level({name:'Prism',hint:'Add yellow and learn the three basic mixes.',palette:{R:1,B:1,Y:1},targets:[X(0,4,['R']),X(4,0,['B']),X(5,5,['Y']),X(2,2,['R','B']),X(3,3,['R','Y']),X(1,1,['B','Y'])]}),
+  level({name:'Curtain',hint:'Walls stop light. Use the gaps to aim around them.',palette:{R:1,B:1},walls:W([1,2],[2,2],[3,2]),targets:[X(0,2,['R']),X(5,2,['B']),X(4,4,['R','B'])]}),
+  level({name:'Anchor',hint:'A fixed lantern changes the whole board.',given:[G(2,1,'R')],palette:{B:1,Y:1},walls:W([1,3],[2,3],[3,3]),targets:[X(2,4,['R']),X(0,1,['B']),X(4,1,['Y'])]}),
+  level({name:'Mirror Bend',hint:'A mirror can redirect a beam to a new row.',palette:{B:1},given:[G(1,1,'B')],mirrors:[M(1,4,'\\')],targets:[X(4,4,['B']),X(1,2,['B'])]}),
+  level({name:'Mirror Pair',hint:'Two mirrors make a tiny beam tunnel.',palette:{R:1},given:[G(4,4,'R')],mirrors:[M(4,1,'\\'),M(2,1,'/')],targets:[X(2,1,['R']),X(4,0,['R'])]}),
+  level({name:'Splitter Intro',hint:'This splitter splits one beam into two beams.',palette:{R:1,B:1},given:[G(0,2,'B')],splitters:[S(2,2)],targets:[X(2,0,['B']),X(2,4,['B']),X(4,2,['R'])]}),
+  level({name:'Split Mix',hint:'Use the split to stack colors in two different spots.',palette:{R:1,Y:1},given:[G(0,3,'B')],splitters:[S(3,3)],targets:[X(3,1,['B','R']),X(3,5,['B','Y']),X(5,3,['B'])]}),
+  level({name:'Rotor',hint:'Turners bend light 90° without a mirror.',palette:{R:1},given:[G(0,4,'R')],turners:[T(2,4,'cw')],targets:[X(2,2,['R']),X(4,4,['R'])]}),
+  level({name:'Rotor Maze',hint:'Mix a turner with a mirror to reach a hidden lane.',palette:{B:1},given:[G(1,4,'B')],walls:W([0,2],[1,2],[3,2],[4,2]),mirrors:[M(2,4,'/')],turners:[T(2,1,'ccw')],targets:[X(2,0,['B']),X(4,1,['B'])]}),
+  level({name:'Prism Garden',hint:'Everything starts to combine now.',palette:{R:1,B:1,Y:1},splitters:[S(2,2)],mirrors:[M(1,4,'\\'),M(4,1,'/')],targets:[X(0,2,['R']),X(5,2,['B']),X(3,4,['Y']),X(2,0,['R','B']),X(2,5,['R','Y']),X(4,3,['B','Y'])]}),
+  level({name:'White Light',hint:'All three base colors together create a bright mix.',palette:{R:1,B:1,Y:1},given:[G(0,0,'R'),G(0,5,'B')],walls:W([1,1],[1,2],[1,3]),splitters:[S(3,2)],targets:[X(3,0,['R','B']),X(3,4,['B','Y']),X(5,2,['R','B','Y'])]}),
+  level({name:'Switchback',hint:'Route light around the blockers with a calm hand.',palette:{R:1,B:1},given:[G(5,0,'R')],walls:W([2,1],[2,2],[2,3],[4,3]),mirrors:[M(4,1,'\\'),M(1,4,'/')],targets:[X(5,3,['R']),X(1,1,['R']),X(1,5,['B'])]}),
+  level({name:'Lenswork',hint:'Use a splitter and two turners together.',palette:{Y:1},given:[G(0,2,'Y')],splitters:[S(2,2)],turners:[T(2,0,'cw'),T(2,5,'ccw')],targets:[X(2,0,['Y']),X(2,5,['Y']),X(4,2,['Y'])]}),
+  level({name:'Prism Chain',hint:'A beam can change direction more than once.',palette:{R:1,B:1},given:[G(0,1,'R')],mirrors:[M(0,4,'\\'),M(3,4,'/')],splitters:[S(3,1)],targets:[X(3,0,['R']),X(3,5,['R']),X(5,4,['B'])]}),
+  level({name:'Kaleidoscope',hint:'More paths, more intersections, more color mixing.',palette:{R:1,B:1,Y:1},given:[G(5,1,'R')],walls:W([1,0],[1,1],[1,2],[4,3]),mirrors:[M(0,3,'/'),M(4,1,'\\'),M(2,5,'/')],splitters:[S(3,3)],turners:[T(2,3,'cw')],targets:[X(0,1,['R']),X(2,4,['B']),X(4,4,['Y']),X(3,5,['R','B']),X(5,3,['R','Y'])]}),
+  level({name:'Double Split',hint:'Two splitters can fan out a single lantern into a web.',palette:{B:1},given:[G(0,2,'B')],splitters:[S(1,2),S(4,3)],mirrors:[M(2,0,'\\'),M(3,5,'/')],targets:[X(2,0,['B']),X(2,4,['B']),X(5,3,['B'])]}),
+  level({name:'Refraction',hint:'Mirrors, splitters, and turners all in one puzzle.',palette:{R:1,Y:1},given:[G(1,5,'R'),G(4,0,'Y')],walls:W([2,2],[2,3],[3,2]),mirrors:[M(1,2,'\\'),M(4,4,'/')],splitters:[S(3,4)],turners:[T(3,1,'ccw')],targets:[X(1,0,['R']),X(4,5,['Y']),X(3,0,['R','Y']),X(5,4,['Y'])]}),
+  level({name:'Aurora',hint:'The finale: move freely, bend beams, split them, and finish the full spectrum.',palette:{R:1,B:1,Y:1},given:[G(0,0,'R'),G(0,5,'B'),G(5,2,'Y')],walls:W([1,2],[1,3],[3,2],[3,3]),mirrors:[M(0,3,'\\'),M(4,1,'/')],splitters:[S(2,2)],turners:[T(2,4,'cw'),T(4,4,'ccw')],targets:[X(2,0,['R']),X(2,5,['B']),X(4,0,['Y']),X(4,5,['R','B']),X(5,5,['R','Y']),X(3,4,['B','Y']),X(5,3,['R','B','Y'])]})
+];
+
+const TILE_ICON={mirror:{'/':'/','\\':'\\'},split:'⟂',turn:{cw:'↻',ccw:'↺'}};
+const BASIC_ORDER=['R','B','Y'];
+
+function keyOf(value){
+  const arr=value instanceof Set ? [...value] : [...new Set(value)];
+  return arr.sort().join('');
+}
+function comboName(key){
+  return COMBO_INFO[key]?.name || BASIC_ORDER.filter(ch=>key.includes(ch)).map(ch=>COLOR_NAME[ch]).join(' + ') || key;
+}
+function comboHex(key){
+  return COLOR_HEX[key] || COMBO_INFO[key]?.hex || '#888';
+}
+function comboListText(key){
+  const parts=BASIC_ORDER.filter(ch=>key.includes(ch)).map(ch=>COLOR_NAME[ch]);
+  return parts.join(' + ');
+}
+function tileAt(L,r,c){
+  const key=`${r},${c}`;
+  const mirror=L.mirrors.find(t=>`${t.r},${t.c}`===key);
+  if(mirror)return {type:'mirror',...mirror};
+  const splitter=L.splitters.find(t=>`${t.r},${t.c}`===key);
+  if(splitter)return {type:'splitter',...splitter};
+  const turner=L.turners.find(t=>`${t.r},${t.c}`===key);
+  if(turner)return {type:'turner',...turner};
+  return null;
+}
+function isBlocked(L,r,c){
+  return L.walls.some(([wr,wc])=>wr===r&&wc===c);
+}
+function staticCells(L){
+  const map=new Map();
+  for(const [r,c] of L.walls) map.set(`${r},${c}`,{type:'wall'});
+  for(const t of L.mirrors) map.set(`${t.r},${t.c}`,{type:'mirror',kind:t.kind});
+  for(const t of L.splitters) map.set(`${t.r},${t.c}`,{type:'splitter'});
+  for(const t of L.turners) map.set(`${t.r},${t.c}`,{type:'turner',turn:t.turn});
+  return map;
+}
+function traceLight(L,lanterns){
+  const light=Array.from({length:SZ},()=>Array.from({length:SZ},()=>new Set()));
+  const walls=new Set(L.walls.map(([r,c])=>`${r},${c}`));
+  const seen=new Set();
+  const stack=[];
+
+  for(const lantern of lanterns){
+    light[lantern.r][lantern.c].add(lantern.color);
+    for(const dir of DIR_ORDER) stack.push({r:lantern.r,c:lantern.c,dir,color:lantern.color});
+  }
+
+  while(stack.length){
+    const beam=stack.pop();
+    const step=DIRS[beam.dir];
+    const nr=beam.r+step.dr;
+    const nc=beam.c+step.dc;
+    if(nr<0||nr>=SZ||nc<0||nc>=SZ) continue;
+    if(walls.has(`${nr},${nc}`)) continue;
+
+    const state=`${nr},${nc},${beam.dir},${beam.color}`;
+    if(seen.has(state)) continue;
+    seen.add(state);
+
+    light[nr][nc].add(beam.color);
+    const tile=tileAt(L,nr,nc);
+    if(!tile){
+      stack.push({r:nr,c:nc,dir:beam.dir,color:beam.color});
+      continue;
+    }
+
+    if(tile.type==='mirror'){
+      stack.push({r:nr,c:nc,dir:MIRROR_MAP[tile.kind][beam.dir],color:beam.color});
+      continue;
+    }
+    if(tile.type==='splitter'){
+      const branchA=(beam.dir==='U'||beam.dir==='D')?'L':'U';
+      const branchB=(beam.dir==='U'||beam.dir==='D')?'R':'D';
+      stack.push({r:nr,c:nc,dir:branchA,color:beam.color});
+      stack.push({r:nr,c:nc,dir:branchB,color:beam.color});
+      continue;
+    }
+    if(tile.type==='turner'){
+      stack.push({r:nr,c:nc,dir:tile.turn==='cw'?RIGHT[beam.dir]:LEFT[beam.dir],color:beam.color});
+    }
+  }
+
+  return light;
+}
+function checkWin(L,light){
+  return L.targets.every(t=>keyOf(light[t.r][t.c])===keyOf(t.need));
+}
+function levelFormulas(L){
+  const combos=[...new Set(L.targets.map(t=>keyOf(t.need)).filter(k=>k.length>1))];
+  return combos;
+}
+function levelMechanics(L){
+  const items=[];
+  if(L.walls.length) items.push({glyph:'■',text:'Walls block light'});
+  if(L.mirrors.length) items.push({glyph:'/',text:'Mirrors bend beams'});
+  if(L.splitters.length) items.push({glyph:'2',text:'Splitters split a beam in 2'});
+  if(L.turners.length) items.push({glyph:'↻',text:'Turners rotate light 90°'});
+  return items;
+}
+
+let lv=0;
+let placed=[];
+let sel=null;
+let remCount={};
+let lanternId=1;
+
+function freshCounts(L){
+  const out={};
+  for(const [color,count] of Object.entries(L.palette)) out[color]=count;
+  return out;
+}
+function initLevel(i){
+  lv=i;
+  placed=[];
+  sel=null;
+  remCount=freshCounts(LEVELS[i]);
+  lanternId=1;
+  document.getElementById('res').style.display='none';
+  render();
+}
+function selectedSummary(){
+  if(!sel) return 'Tap a lantern to pick it up, then tap a free cell to move it.';
+  if(sel.mode==='palette') return `Placing ${COLOR_NAME[sel.color]}. Tap a free cell to drop it.`;
+  return `Moving ${COLOR_NAME[sel.color]} lantern. Tap a free cell to drop it, or another lantern to swap it.`;
+}
+function canOccupy(L,r,c){
+  if(r<0||r>=SZ||c<0||c>=SZ) return false;
+  if(isBlocked(L,r,c)) return false;
+  if(tileAt(L,r,c)) return false;
+  if(L.given.some(g=>g.r===r&&g.c===c)) return false;
+  return true;
+}
+function placedAt(r,c){
+  return placed.find(p=>p.r===r&&p.c===c);
+}
+function pickUpPlaced(idx){
+  const item=placed[idx];
+  placed.splice(idx,1);
+  remCount[item.color]=(remCount[item.color]||0)+1;
+  sel={mode:'move',color:item.color,id:item.id};
+}
+function placeSelAt(L,r,c){
+  if(!sel) return;
+  if(!canOccupy(L,r,c)) return;
+  remCount[sel.color]=(remCount[sel.color]||0)-1;
+  placed.push({id:lanternId++,r,c,color:sel.color});
+  sel=null;
+  render();
+}
+function swapWithPlaced(idx,r,c){
+  const current=placed[idx];
+  if(!sel) return;
+  if(sel.mode==='move'){
+    placed[idx]={...placed[idx],r,c,color:sel.color};
+    sel={mode:'move',color:current.color,id:current.id};
+    render();
+  }
+}
+function cellClick(r,c,info,won){
+  if(won) return;
+  const L=LEVELS[lv];
+  if(info?.type==='wall') return;
+  if(L.given.some(g=>g.r===r&&g.c===c)) return;
+  const occupantIdx=placed.findIndex(p=>p.r===r&&p.c===c);
+
+  if(info?.type){
+    return;
+  }
+
+  if(sel){
+    if(occupantIdx>=0 && sel.mode==='move'){
+      const current=placed[occupantIdx];
+      remCount[sel.color]=(remCount[sel.color]||0)-1;
+      remCount[current.color]=(remCount[current.color]||0)+1;
+      placed[occupantIdx]={...current,r,c,color:sel.color};
+      sel={mode:'move',color:current.color,id:current.id};
+      render();
+      return;
+    }
+    if(occupantIdx>=0) return;
+    placeSelAt(L,r,c);
+    return;
+  }
+
+  if(occupantIdx>=0){
+    pickUpPlaced(occupantIdx);
+    render();
+  }
+}
+function setPaletteSelection(color){
+  if(sel && sel.mode==='move' && sel.color===color) return;
+  sel=sel&&sel.mode==='palette'&&sel.color===color ? null : {mode:'palette',color};
+  render();
+}
+function lightKeySet(set){
+  return keyOf(set);
+}
+function render(){
+  const L=LEVELS[lv];
+  document.getElementById('lname').textContent=L.name;
+  document.getElementById('hint').textContent=L.hint;
+  document.getElementById('ldots').innerHTML=LEVELS.map((_,i)=>`<div class="ld ${i<lv?'done':i===lv?'cur':''}"></div>`).join('');
+  document.getElementById('status').textContent=selectedSummary();
+
+  const staticMap=staticCells(L);
+  const givenMap=new Map(L.given.map(g=>[`${g.r},${g.c}`,g.color]));
+  const placedMap=new Map(placed.map(p=>[`${p.r},${p.c}`,p]));
+  const light=traceLight(L,[...L.given,...placed]);
+  const won=checkWin(L,light);
+
+  const formulaList=document.getElementById('formulaList');
+  const formulas=levelFormulas(L);
+  formulaList.innerHTML='';
+  if(formulas.length){
+    for(const key of formulas){
+      const row=document.createElement('div');
+      row.className='mix formula';
+      const dot=document.createElement('div');
+      dot.className='dot';
+      dot.style.background=comboHex(key);
+      const text=document.createElement('div');
+      text.innerHTML=`<span class="name">${comboName(key)}</span> = ${comboListText(key)}`;
+      row.appendChild(dot);
+      row.appendChild(text);
+      formulaList.appendChild(row);
+    }
+  } else {
+    const empty=document.createElement('div');
+    empty.className='help';
+    empty.textContent='This level uses only the three base colors.';
+    formulaList.appendChild(empty);
+  }
+
+  const mechanics=document.getElementById('mechanicList');
+  mechanics.innerHTML='';
+  for(const item of levelMechanics(L)){
+    const row=document.createElement('div');
+    row.className='mech';
+    const g=document.createElement('span');
+    g.className='glyph';
+    g.textContent=item.glyph;
+    const t=document.createElement('span');
+    t.textContent=item.text;
+    row.appendChild(g);
+    row.appendChild(t);
+    mechanics.appendChild(row);
+  }
+  if(!mechanics.children.length){
+    const empty=document.createElement('div');
+    empty.className='help';
+    empty.textContent='No special tiles yet.';
+    mechanics.appendChild(empty);
+  }
+
+  const gEl=document.getElementById('grid');
+  gEl.innerHTML='';
+  for(let r=0;r<SZ;r++){
+    for(let c=0;c<SZ;c++){
+      const key=`${r},${c}`;
+      const info=staticMap.get(key);
+      const isGiven=givenMap.has(key);
+      const placedItem=placedMap.get(key);
+      const target=L.targets.find(t=>t.r===r&&t.c===c);
+      const cellLight=light[r][c];
+      const litKey=lightKeySet(cellLight);
+      const isLit=cellLight.size>0;
+      const cell=document.createElement('div');
+      cell.className='cell';
+      if(info?.type==='wall') cell.classList.add('wall','blocked');
+      if(info?.type && info.type!=='wall') cell.classList.add('blocked');
+      if(target && keyOf(target.need)===litKey) cell.classList.add('target-ok');
+      if(sel && sel.mode==='move' && placedItem && placedItem.id===sel.id) cell.classList.add('sel');
+      if(isLit && !(info?.type==='wall')) cell.style.background=comboHex(litKey);
+
+      if(info?.type==='mirror'){
+        const tile=document.createElement('div');
+        tile.className='tile mirror';
+        tile.textContent=info.kind;
+        cell.appendChild(tile);
+      } else if(info?.type==='splitter'){
+        const tile=document.createElement('div');
+        tile.className='tile split';
+        tile.textContent='2';
+        cell.appendChild(tile);
+      } else if(info?.type==='turner'){
+        const tile=document.createElement('div');
+        tile.className='tile turn';
+        tile.textContent=info.turn==='cw'?'↻':'↺';
+        cell.appendChild(tile);
+      }
+
+      if(isGiven||placedItem){
+        const color=isGiven ? givenMap.get(key) : placedItem.color;
+        const lantern=document.createElement('div');
+        lantern.className='lantern'+(isGiven?' given':'');
+        lantern.style.background=COLOR_HEX[color];
+        cell.appendChild(lantern);
+      }
+
+      if(target){
+        const targetKey=keyOf(target.need);
+        if(targetKey===litKey){
+          const ok=document.createElement('div');
+          ok.className='target-met';
+          ok.textContent='✓';
+          cell.appendChild(ok);
+        } else {
+          const ind=document.createElement('div');
+          ind.className='target-ind';
+          ind.style.background=comboHex(targetKey);
+          cell.appendChild(ind);
+        }
+      }
+
+      cell.addEventListener('click',()=>cellClick(r,c,info,won));
+      gEl.appendChild(cell);
+    }
+  }
+
+  const palEl=document.getElementById('palette');
+  palEl.innerHTML='';
+  for(const [color,count] of Object.entries(L.palette)){
+    const available=remCount[color]||0;
+    const btn=document.createElement('button');
+    btn.className='pb'+(sel?.mode==='palette'&&sel.color===color?' sel':'');
+    btn.disabled=available<=0 && !(sel?.mode==='palette'&&sel.color===color);
+    const dot=document.createElement('div');
+    dot.className='pd';
+    dot.style.background=COLOR_HEX[color];
+    btn.appendChild(dot);
+    btn.appendChild(document.createTextNode(`${COLOR_NAME[color]} × ${available}`));
+    btn.addEventListener('click',()=>setPaletteSelection(color));
+    palEl.appendChild(btn);
+  }
+
+  if(won){
+    const res=document.getElementById('res');
+    res.style.display='flex';
+    document.getElementById('rmsg').textContent='✓ All lights aligned';
+    document.getElementById('rsub').textContent=lv<LEVELS.length-1?'The pattern is complete.':'You have mastered all 20 levels.';
+    const rbx=document.getElementById('rbx');
+    rbx.innerHTML='';
+    if(lv<LEVELS.length-1){
+      const nb=document.createElement('button');
+      nb.className='pr';
+      nb.textContent='Next level →';
+      nb.onclick=()=>initLevel(lv+1);
+      rbx.appendChild(nb);
+    } else {
+      const again=document.createElement('button');
+      again.className='pr';
+      again.textContent='Play again';
+      again.onclick=()=>initLevel(0);
+      rbx.appendChild(again);
+    }
+  }
+}
+
+document.getElementById('rb').onclick=()=>initLevel(lv);
+initLevel(0);
+</script>
